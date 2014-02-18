@@ -1,0 +1,63 @@
+#!/usr/bin/python
+import requests
+import sys
+import getopt
+
+
+def main():
+    term = "+".join(sys.argv[1:])
+    results = google_search(term)
+    for r in results:
+        print 'Title: %s\nLink: %s\nDesc: %s\n' % r
+
+def google_search(term):
+    url = "http://www.google.com/search?hl=en&safe=off&q=%s" % term
+    results_page = get_webpage(url)
+    results_list = extract_results(results_page)
+    return results_list
+
+def get_webpage(url):
+    user_agent = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.0.7) Gecko/2009021910 Firefox/3.0.7'
+    headers = {'User-Agent': user_agent,} 
+    r = requests.get(url, headers=headers)
+    return r.content
+
+def extract_results(results_page):
+    start_tag = '<li class="g">'
+    end_tag = '</div></li>'
+    indices = get_index_list(start_tag, results_page, [])
+    results = []
+    for i in indices:
+        snippet_end = results_page[i:].find(end_tag)
+        snippet = results_page[i:i + snippet_end]
+        link = pull_from_snippet(snippet, '<a href="/url?q=', '&amp;')
+        title = pull_from_snippet(pull_from_snippet(snippet, '<a href="/url?q='), '>', '</a>')
+        formatted_title = title.replace('<b>', '\033[1m').replace('</b>', '\033[0m')
+        desc = pull_from_snippet(snippet, '<span class="st">', '</span>')
+        formatted_desc = desc.replace('<b>', '\033[1m').replace('</b>', '\033[0m')
+        results.append((formatted_title, link, formatted_desc, ))
+
+    return results
+
+def pull_from_snippet(snippet, start_tag, end_tag=None):
+    if not start_tag in snippet:
+        return snippet
+    start_index = snippet.find(start_tag) + len(start_tag)
+    if end_tag and end_tag in snippet:
+        end_index = snippet[start_index:].find(end_tag) + start_index
+    else:
+        end_index = len(snippet) - 1
+    return snippet[start_index:end_index]
+
+def get_index_list(tag, content, indices):
+    if tag in content:
+        index = content.find(tag)
+        previous_index = indices[len(indices) - 1] + len(tag) if indices else 0
+        indices.append(index + previous_index)
+        return get_index_list(tag, content[index + len(tag):], indices)
+    else:
+        return indices
+
+
+if __name__ == "__main__":
+    main()
